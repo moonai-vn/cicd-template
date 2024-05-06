@@ -8,6 +8,7 @@ x-moonai-config:
 
 services:
   app:
+    container_name: moonai-${REPO_NAME}
     image: ${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
     ports:
       - "${HOST_PORT}:${CONTAINER_PORT}"
