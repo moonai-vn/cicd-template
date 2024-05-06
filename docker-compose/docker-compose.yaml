@@ -1,9 +1,13 @@
-version: '3'
+version: '3.9'
+name: moonai
+
+x-moonai-config:
+  &moonai-env
+  HOST_PORT: ${HOST_PORT:-127.0.0.1:5000}
+  CONTAINER_PORT: ${CONTAINER_PORT:-5000}
+
 services:
   app:
     image: ${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
     ports:
-      - "${HOST_PORT:-3000}:3000"
-    environment:
-      - ENV_VAR1=${ENV_VAR1}
-      - ENV_VAR2=${ENV_VAR2}
+      - "${HOST_PORT}:${CONTAINER_PORT}"
