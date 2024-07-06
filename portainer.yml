@@ -9,12 +9,12 @@ env:
   DEPLOY_HOME: /home/admin/deploy
   TEMPLATES_REPO: moonai-vn/cicd-template
   TEMPLATES_PATH: cicd-template
-  COMPOSE_TEMPLATE: docker-compose/docker-compose.yaml
+  COMPOSE_TEMPLATE: docker-compose/docker-compose-v2.yaml
   MOON_AI_REGISTRY: registry.moonai.vn
   PORTAINER_ENDPOINT: port.moonai.vn
   ENDPOINT_ID: 2
   PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
-  HOST_PORT: "127.0.0.1:5555"
+  HOST_PORT: 127.0.0.1:5555
   CONTAINER_PORT: 5000
 
 jobs:      
@@ -56,7 +56,7 @@ jobs:
       - name: Render docker-compose.yml
         run: |
           envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > filled-docker-compose.yml
-          
+
       - uses: rrennoir/portainer-stack@v2
         with:
           portainerUrl: "https://${{ env.PORTAINER_ENDPOINT }}"
