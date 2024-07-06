@@ -1,0 +1,15 @@
+version: '3.9'
+name: moonai
+
+x-moonai-config:
+  &moonai-env
+  HOST_PORT: ${HOST_PORT:-127.0.0.1:5000}
+  CONTAINER_PORT: ${CONTAINER_PORT:-5000}
+  MOON_AI_REGISTRY: ${MOON_AI_REGISTRY:-registry.moonai.vn}
+
+services:
+  app:
+    container_name: ${REPO_NAME}
+    image: ${MOON_AI_REGISTRY}/${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
+    ports:
+      - ${HOST_PORT}:${CONTAINER_PORT}
