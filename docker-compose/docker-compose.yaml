@@ -3,12 +3,12 @@ name: moonai
 
 x-moonai-config:
   &moonai-env
-  HOST_PORT: "${HOST_PORT:-127.0.0.1:5000}"
-  CONTAINER_PORT: "${CONTAINER_PORT:-5000}"
+  HOST_PORT: ${HOST_PORT:-127.0.0.1:5000}
+  CONTAINER_PORT: ${CONTAINER_PORT:-5000}
 
 services:
   app:
     container_name: ${REPO_NAME}
     image: ${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
     ports:
-      - "${HOST_PORT}:${CONTAINER_PORT}"
+      - ${HOST_PORT}:${CONTAINER_PORT}
