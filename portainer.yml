@@ -3,7 +3,7 @@ name: Build and Deploy using Portainer
 on:
   push:
     branches:
-      - main
+      - production
 
 env:
   DEPLOY_HOME: /home/admin/deploy
@@ -13,10 +13,11 @@ env:
   MOON_AI_REGISTRY: registry.moonai.vn
   PORTAINER_ENDPOINT: https://port.moonai.vn/api
   PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+  RUNNER_TAG: self-hosted
 
 jobs:      
   build-and-deploy:
-    runs-on: self-hosted
+    runs-on: ${{ env.RUNNER_TAG }}
     steps:
       - name: Set variables
         id: vars
