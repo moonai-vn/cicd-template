@@ -11,13 +11,15 @@ env:
   TEMPLATES_PATH: cicd-template
   COMPOSE_TEMPLATE: docker-compose/docker-compose.yaml
   MOON_AI_REGISTRY: registry.moonai.vn
-  PORTAINER_ENDPOINT: https://port.moonai.vn/api
+  PORTAINER_ENDPOINT: port.moonai.vn
+  ENDPOINT_ID: 2
   PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
-  RUNNER_TAG: self-hosted
+  HOST_PORT: 127.0.0.1:5555
+  CONTAINER_PORT: 5000
 
 jobs:      
   build-and-deploy:
-    runs-on: ${{ RUNNER_TAG }}
+    runs-on: self-hosted
     steps:
       - name: Set variables
         id: vars
@@ -25,7 +27,7 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
           BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
           COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "REPO_NAME=$MOON_AI_REGISTRY/${REPO_NAME}" >> $GITHUB_ENV
+          echo "REPO_NAME=${REPO_NAME}" >> $GITHUB_ENV
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "DEPLOY_DIR=${DEPLOY_HOME}/${REPO_NAME}" >> $GITHUB_ENV
@@ -50,35 +52,48 @@ jobs:
           context: application
           push: true
           tags: ${{ env.MOON_AI_REGISTRY }}/${{ env.REPO_NAME }}:${{ env.BRANCH_NAME }}-${{ env.COMMIT_HASH }}
-        
-      - name: "[Portainer] Deploy a Kubernetes application"
-        shell: bash
+
+      - name: Render docker-compose.yml
         run: |
-          curl \
-            "https://${{ github.event.inputs.PORTAINER_URL }}/api/stacks?endpointId=${{ github.event.inputs.ENDPOINT_ID }}&method=repository&type=3" \
-            --request POST \
-            --insecure \
-            --header "x-api-key: ${PORTAINER_API_KEY}" \
-            --header 'Content-Type: application/json' \
-            --data-binary @- << EOF
-              {
-                "Name": "${{ env.REPO_NAME }}-${{ env.BRANCH_NAME }}",
-                "StackFileContent": "$(cat ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} | envsubst)",
-                "Env": [
-                  {
-                    "name": "REPO_NAME",
-                    "value": "${{ env.REPO_NAME }}"
-                  },
-                  {
-                    "name": "BRANCH_NAME", 
-                    "value": "${{ env.BRANCH_NAME }}"
-                  },
-                  {
-                    "name": "COMMIT_HASH",
-                    "value": "${{ env.COMMIT_HASH }}"
-                  }
-                ]
-              }
-              EOF
-        env:
-          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+          docker compose -f ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} config > filled-docker-compose.yml
+
+      - uses: rrennoir/portainer-stack@v2
+        with:
+          portainerUrl: "https://${{ env.PORTAINER_ENDPOINT }}"
+          portainerApiKey: ${{ secrets.PORTAINER_API_KEY }}
+          portainerEndpointId: ${{ env.ENDPOINT_ID }}
+          stackName: ${{ env.REPO_NAME }}
+          stackType: 2
+          composeFile: filled-docker-compose.yml
+
+      # - name: "[Portainer] Deploy a Docker application on Portainer"
+      #   shell: bash
+      #   run: |
+      #     curl \
+      #       "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks?endpointId=${{ env.ENDPOINT_ID }}&method=repository&type=3" \
+      #       --request POST \
+      #       --insecure \
+      #       --header "x-api-key: ${PORTAINER_API_KEY}" \
+      #       --header 'Content-Type: application/json' \
+      #       --data-binary @- <<EOF
+      #     {
+      #       "Name": "${{ env.REPO_NAME }}-${{ env.BRANCH_NAME }}",
+      #       "StackFileContent": "$(cat ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} | envsubst)",
+      #       "Env": [
+      #         {
+      #           "name": "REPO_NAME",
+      #           "value": "${{ env.REPO_NAME }}"
+      #         },
+      #         {
+      #           "name": "BRANCH_NAME", 
+      #           "value": "${{ env.BRANCH_NAME }}"
+      #         },
+      #         {
+      #           "name": "COMMIT_HASH",
+      #           "value": "${{ env.COMMIT_HASH }}"
+      #         }
+      #       ]
+      #     }
+      #     EOF
+      #   env:
+      #     PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
