@@ -1,0 +1,83 @@
+name: Build and Deploy using Portainer
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DEPLOY_HOME: /home/admin/deploy
+  TEMPLATES_REPO: moonai-vn/cicd-template
+  TEMPLATES_PATH: cicd-template
+  COMPOSE_TEMPLATE: docker-compose/docker-compose.yaml
+  MOON_AI_REGISTRY: registry.moonai.vn
+  PORTAINER_ENDPOINT: https://port.moonai.vn/api
+  PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+
+jobs:      
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Set variables
+        id: vars
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
+          BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
+          COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "REPO_NAME=$MOON_AI_REGISTRY/${REPO_NAME}" >> $GITHUB_ENV
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "DEPLOY_DIR=${DEPLOY_HOME}/${REPO_NAME}" >> $GITHUB_ENV
+          
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          path: application
+
+      - name: Checkout central templates
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TEMPLATES_REPO }}
+          path: ${{ env.TEMPLATES_PATH }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: application
+          push: true
+          tags: ${{ env.MOON_AI_REGISTRY }}/${{ env.REPO_NAME }}:${{ env.BRANCH_NAME }}-${{ env.COMMIT_HASH }}
+        
+      - name: "[Portainer] Deploy a Kubernetes application"
+        shell: bash
+        run: |
+          curl \
+            "https://${{ github.event.inputs.PORTAINER_URL }}/api/stacks?endpointId=${{ github.event.inputs.ENDPOINT_ID }}&method=repository&type=3" \
+            --request POST \
+            --insecure \
+            --header "x-api-key: ${PORTAINER_API_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data-binary @- << EOF
+              {
+                "Name": "${{ env.REPO_NAME }}-${{ env.BRANCH_NAME }}",
+                "StackFileContent": "$(cat ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} | envsubst)",
+                "Env": [
+                  {
+                    "name": "REPO_NAME",
+                    "value": "${{ env.REPO_NAME }}"
+                  },
+                  {
+                    "name": "BRANCH_NAME", 
+                    "value": "${{ env.BRANCH_NAME }}"
+                  },
+                  {
+                    "name": "COMMIT_HASH",
+                    "value": "${{ env.COMMIT_HASH }}"
+                  }
+                ]
+              }
+              EOF
+        env:
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
