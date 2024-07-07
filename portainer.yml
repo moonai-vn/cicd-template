@@ -18,7 +18,7 @@ env:
   CONTAINER_PORT: 5000
 
 jobs:      
-  build-and-deploy:
+  build-and-push:
     runs-on: self-hosted
     steps:
       - name: Set variables
@@ -37,12 +37,6 @@ jobs:
         with:
           path: application
 
-      - name: Checkout central templates
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.TEMPLATES_REPO }}
-          path: ${{ env.TEMPLATES_PATH }}
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
@@ -52,48 +46,82 @@ jobs:
           context: application
           push: true
           tags: ${{ env.MOON_AI_REGISTRY }}/${{ env.REPO_NAME }}:${{ env.BRANCH_NAME }}-${{ env.COMMIT_HASH }}
+          cache-from: type=registry,ref=${{ env.MOON_AI_REGISTRY }}/${{ env.REPO_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.MOON_AI_REGISTRY }}/${{ env.REPO_NAME }}:cache,mode=max
 
-      - name: Render docker-compose.yml
+
+  deploy-to-portainer:
+    needs: build-and-push
+    runs-on: self-hosted
+    steps:
+      - name: Set variables
+        id: vars
         run: |
-          envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > filled-docker-compose.yml
+          REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
+          BRANCH_NAME=$(echo "${{ github.ref }}" | sed 's|refs/heads/||')
+          COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "REPO_NAME=${REPO_NAME}" >> $GITHUB_ENV
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "DEPLOY_DIR=${DEPLOY_HOME}/${REPO_NAME}" >> $GITHUB_ENV
 
-      - uses: rrennoir/portainer-stack@v2
+      - name: Checkout central templates
+        uses: actions/checkout@v4
         with:
-          portainerUrl: "https://${{ env.PORTAINER_ENDPOINT }}"
-          portainerApiKey: ${{ secrets.PORTAINER_API_KEY }}
-          portainerEndpointId: ${{ env.ENDPOINT_ID }}
-          stackName: ${{ env.REPO_NAME }}
-          stackType: 2
-          composeFile: filled-docker-compose.yml
+          repository: ${{ env.TEMPLATES_REPO }}
+          path: ${{ env.TEMPLATES_PATH }}
+          
+      - name: Check if stack exists
+        id: check_stack
+        run: |
+          stack_id=$(curl -s \
+            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks" \
+            --header "x-api-key: ${{ env.PORTAINER_API_KEY }}" \
+            --header 'Content-Type: application/json' | \
+            jq -r '.[] | select(.Name == "${{ env.REPO_NAME }}") | .Id')
+          echo "stack_id=${stack_id}" >> $GITHUB_OUTPUT
 
-      # - name: "[Portainer] Deploy a Docker application on Portainer"
-      #   shell: bash
-      #   run: |
-      #     curl \
-      #       "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks?endpointId=${{ env.ENDPOINT_ID }}&method=repository&type=3" \
-      #       --request POST \
-      #       --insecure \
-      #       --header "x-api-key: ${PORTAINER_API_KEY}" \
-      #       --header 'Content-Type: application/json' \
-      #       --data-binary @- <<EOF
-      #     {
-      #       "Name": "${{ env.REPO_NAME }}-${{ env.BRANCH_NAME }}",
-      #       "StackFileContent": "$(cat ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} | envsubst)",
-      #       "Env": [
-      #         {
-      #           "name": "REPO_NAME",
-      #           "value": "${{ env.REPO_NAME }}"
-      #         },
-      #         {
-      #           "name": "BRANCH_NAME", 
-      #           "value": "${{ env.BRANCH_NAME }}"
-      #         },
-      #         {
-      #           "name": "COMMIT_HASH",
-      #           "value": "${{ env.COMMIT_HASH }}"
-      #         }
-      #       ]
-      #     }
-      #     EOF
-      #   env:
-      #     PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+      - name: Create stack if it doesn't exist
+        if: steps.check_stack.outputs.stack_id == 'null' || steps.check_stack.outputs.stack_id == ''
+        run: |
+          envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > ${TEMPLATES_PATH}/filled-docker-compose.yml
+          STACK_FILE_CONTENT=$(cat ${TEMPLATES_PATH}/filled-docker-compose.yml | jq -sR .)
+          curl_response=$(curl -s -o response.txt -w "%{http_code}" \
+            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks?endpointId=${{ env.ENDPOINT_ID }}&method=string&type=1" \
+            --request POST \
+            --header "x-api-key: ${{ env.PORTAINER_API_KEY }}" \
+            --header 'Content-Type: application/json' \
+            --data-binary @- <<EOF
+          {
+            "Name": "${{ env.REPO_NAME }}",
+            "StackFileContent": ${STACK_FILE_CONTENT}
+          }
+          EOF
+          )
+          if [ "$curl_response" -ne 200 ]; then
+            echo "Stack creation failed with status code $curl_response"
+            cat response.txt
+            exit 1
+          fi
+
+      - name: Update stack if it exists
+        if: steps.check_stack.outputs.stack_id != 'null' && steps.check_stack.outputs.stack_id != ''
+        run: |
+          envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > ${TEMPLATES_PATH}/filled-docker-compose.yml
+          STACK_FILE_CONTENT=$(cat ${TEMPLATES_PATH}/filled-docker-compose.yml | jq -sR .)
+          curl_response=$(curl -s -o response.txt -w "%{http_code}" \
+            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}" \
+            --request PUT \
+            --header "x-api-key: ${{ env.PORTAINER_API_KEY }}" \
+            --header 'Content-Type: application/json' \
+            --data-binary @- <<EOF
+          {
+            "StackFileContent": ${STACK_FILE_CONTENT}
+          }
+          EOF
+          )
+          if [ "$curl_response" -ne 200 ]; then
+            echo "Stack update failed with status code $curl_response"
+            cat response.txt
+            exit 1
+          fi
