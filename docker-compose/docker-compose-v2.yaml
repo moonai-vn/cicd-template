@@ -15,7 +15,7 @@ services:
     ports:
       - ${HOST_PORT}:${CONTAINER_PORT}
     networks:
-      - ${MOON_AI_NETWORK}
+      - "${MOON_AI_NETWORK}"
 
 networks:
   moonai_kong-net:
