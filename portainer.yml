@@ -14,7 +14,7 @@ env:
   PORTAINER_ENDPOINT: port.moonai.vn
   ENDPOINT_ID: 2
   PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
-  HOST_PORT: 127.0.0.1:5555
+  HOST_PORT: 127.0.0.1:6666
   CONTAINER_PORT: 5000
 
 jobs:      
@@ -87,7 +87,7 @@ jobs:
           envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > ${TEMPLATES_PATH}/filled-docker-compose.yml
           STACK_FILE_CONTENT=$(cat ${TEMPLATES_PATH}/filled-docker-compose.yml | jq -sR .)
           curl_response=$(curl -s -o response.txt -w "%{http_code}" \
-            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks?endpointId=${{ env.ENDPOINT_ID }}&method=string&type=1" \
+            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks?endpointId=${{ env.ENDPOINT_ID }}&method=string&type=2" \
             --request POST \
             --header "x-api-key: ${{ env.PORTAINER_API_KEY }}" \
             --header 'Content-Type: application/json' \
@@ -110,7 +110,7 @@ jobs:
           envsubst < ${TEMPLATES_PATH}/${COMPOSE_TEMPLATE} > ${TEMPLATES_PATH}/filled-docker-compose.yml
           STACK_FILE_CONTENT=$(cat ${TEMPLATES_PATH}/filled-docker-compose.yml | jq -sR .)
           curl_response=$(curl -s -o response.txt -w "%{http_code}" \
-            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}" \
+            "https://${{ env.PORTAINER_ENDPOINT }}/api/stacks/${{ steps.check_stack.outputs.stack_id }}?endpointId=${{ env.ENDPOINT_ID }}&method=string&type=2" \
             --request PUT \
             --header "x-api-key: ${{ env.PORTAINER_API_KEY }}" \
             --header 'Content-Type: application/json' \

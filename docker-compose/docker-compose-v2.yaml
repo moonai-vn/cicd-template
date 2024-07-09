@@ -6,6 +6,7 @@ x-moonai-config:
   HOST_PORT: ${HOST_PORT:-127.0.0.1:5000}
   CONTAINER_PORT: ${CONTAINER_PORT:-5000}
   MOON_AI_REGISTRY: ${MOON_AI_REGISTRY:-registry.moonai.vn}
+  MOON_AI_NETWORK: ${MOON_AI_NETWORK:-moonai_kong-net}
 
 services:
   app:
@@ -13,3 +14,9 @@ services:
     image: ${MOON_AI_REGISTRY}/${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
     ports:
       - ${HOST_PORT}:${CONTAINER_PORT}
+    networks:
+      - ${MOON_AI_NETWORK}
+
+networks:
+  moonai_kong-net:
+    external: true
