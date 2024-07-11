@@ -6,6 +6,16 @@ x-moonai-config:
   HOST_PORT: ${HOST_PORT:-127.0.0.1:5000}
   CONTAINER_PORT: ${CONTAINER_PORT:-5000}
   MOON_AI_REGISTRY: ${MOON_AI_REGISTRY:-registry.moonai.vn}
+  DB_TYPE: ${DB_TYPE}
+  DB_HOST: ${DB_HOST}
+  DB_PORT: ${DB_PORT}
+  DB_USERNAME: ${DB_USERNAME}
+  DB_PASSWORD: ${DB_PASSWORD}
+  DB_NAME: ${DB_NAME}
+  JWT_SECRET: ${JWT_SECRET}
+  EXPIRES_ACCESS_TOKEN: ${EXPIRES_ACCESS_TOKEN}
+  EXPIRES_REFRESH_TOKEN: ${EXPIRES_REFRESH_TOKEN}
+  CLIENT_URL: ${CLIENT_URL}
 
 services:
   app:
@@ -13,6 +23,8 @@ services:
     image: ${MOON_AI_REGISTRY}/${REPO_NAME}:${BRANCH_NAME}-${COMMIT_HASH}
     ports:
       - ${HOST_PORT}:${CONTAINER_PORT}
+    environment:
+      <<: *moonai-env
     networks:
       - moonai_kong-net
 
